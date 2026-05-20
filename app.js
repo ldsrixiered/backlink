@@ -162,7 +162,7 @@ function rowTemplate(item) {
         <div class="row-actions">
           <button class="mini-button" data-action="draft" type="button">Draft</button>
           <button class="mini-button" data-action="check" type="button">Check</button>
-          <button class="mini-button" data-action="sent" type="button">Sent</button>
+          <button class="mini-button" data-action="email" type="button">Email</button>
           <button class="mini-button" data-action="edit" type="button">Edit</button>
           <button class="mini-button" data-action="delete" type="button">Delete</button>
         </div>
@@ -189,7 +189,7 @@ function bindRowActions() {
 
       if (action === 'draft') showDraft(item);
       if (action === 'check') checkBacklink(item);
-      if (action === 'sent') markSent(item);
+      if (action === 'email') composeEmail(item);
       if (action === 'edit') openForm(item);
       if (action === 'delete') deleteProspect(item);
     });
@@ -306,9 +306,10 @@ async function checkBacklink(item) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ liveUrl: item.liveUrl, targetUrl: item.targetUrl })
     });
-    const result = await response.json();
+    const responseText = await response.text();
+    const result = parseJsonResponse(responseText);
 
-    if (!response.ok) throw new Error(result.error || 'Check failed');
+    if (!response.ok) throw new Error(result.error || `Request failed with ${response.status}`);
 
     item.linkStatus = result.found
       ? `Live - ${result.nofollow ? 'nofollow' : 'dofollow'}`
@@ -320,6 +321,24 @@ async function checkBacklink(item) {
 
   saveProspects();
   render();
+}
+
+function composeEmail(item) {
+  if (!item.contactEmail) {
+    alert('Add a contact email first.');
+    return;
+  }
+
+  item.draft = item.draft || generateDraft(item);
+  const subject = `Resource suggestion for ${item.domain || 'your website'}`;
+  const mailto = [
+    `mailto:${encodeURIComponent(item.contactEmail)}`,
+    `?subject=${encodeURIComponent(subject)}`,
+    `&body=${encodeURIComponent(item.draft)}`
+  ].join('');
+
+  markSent(item);
+  window.location.href = mailto;
 }
 
 function markSent(item) {
@@ -510,6 +529,15 @@ function parseCsv(text) {
 function csvEscape(value) {
   const text = String(value ?? '');
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function parseJsonResponse(text) {
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: 'Server returned an unreadable response' };
+  }
 }
 
 function escapeHtml(value) {
