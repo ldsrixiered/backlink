@@ -162,7 +162,7 @@ function rowTemplate(item) {
         <div class="row-actions">
           <button class="mini-button" data-action="draft" type="button">Draft</button>
           <button class="mini-button" data-action="check" type="button">Check</button>
-          <button class="mini-button" data-action="email" type="button">Email</button>
+          <button class="mini-button" data-action="email" type="button">Send Email</button>
           <button class="mini-button" data-action="edit" type="button">Edit</button>
           <button class="mini-button" data-action="delete" type="button">Delete</button>
         </div>
@@ -323,7 +323,7 @@ async function checkBacklink(item) {
   render();
 }
 
-function composeEmail(item) {
+async function composeEmail(item) {
   if (!item.contactEmail) {
     alert('Add a contact email first.');
     return;
@@ -331,14 +331,35 @@ function composeEmail(item) {
 
   item.draft = item.draft || generateDraft(item);
   const subject = `Resource suggestion for ${item.domain || 'your website'}`;
-  const mailto = [
-    `mailto:${encodeURIComponent(item.contactEmail)}`,
-    `?subject=${encodeURIComponent(subject)}`,
-    `&body=${encodeURIComponent(item.draft)}`
-  ].join('');
+  const ok = confirm(`Send this outreach email to ${item.contactEmail}?`);
+  if (!ok) return;
 
-  markSent(item);
-  window.location.href = mailto;
+  item.linkStatus = 'Sending email...';
+  saveProspects();
+  render();
+
+  try {
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: item.contactEmail,
+        subject,
+        body: item.draft
+      })
+    });
+    const responseText = await response.text();
+    const result = parseJsonResponse(responseText);
+
+    if (!response.ok) throw new Error(result.error || `Request failed with ${response.status}`);
+
+    item.linkStatus = 'Email sent';
+    markSent(item);
+  } catch (error) {
+    item.linkStatus = `Email failed: ${error.message}`;
+    saveProspects();
+    render();
+  }
 }
 
 function markSent(item) {

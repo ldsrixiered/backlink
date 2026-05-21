@@ -1,0 +1,12 @@
+{
+  "name": "backlink-desk",
+  "version": "1.0.0",
+  "description": "Backlink outreach CRM with automatic email sending and backlink checks.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "nodemailer": "^8.0.7"
+  }
+}

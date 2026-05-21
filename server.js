@@ -1,6 +1,10 @@
 const http = require('node:http');
+const fsSync = require('node:fs');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const nodemailer = require('nodemailer');
+
+loadEnvFile();
 
 const PORT = Number(process.env.PORT || 4173);
 const ROOT = __dirname;
@@ -16,6 +20,11 @@ const server = http.createServer(async (request, response) => {
   try {
     if (request.method === 'POST' && request.url === '/api/check-link') {
       await handleCheckLink(request, response);
+      return;
+    }
+
+    if (request.method === 'POST' && request.url === '/api/send-email') {
+      await handleSendEmail(request, response);
       return;
     }
 
@@ -80,6 +89,44 @@ async function handleCheckLink(request, response) {
   });
 }
 
+async function handleSendEmail(request, response) {
+  const body = await readBody(request);
+  const { to, subject, body: emailBody } = JSON.parse(body || '{}');
+
+  if (!isEmailConfigured()) {
+    sendJson(response, 500, {
+      error: 'Email is not configured. Add SMTP settings to your .env or hosting environment.'
+    });
+    return;
+  }
+
+  if (!isValidEmail(to) || !subject || !emailBody) {
+    sendJson(response, 400, {
+      error: 'Recipient, subject, and email body are required.'
+    });
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: Number(process.env.EMAIL_PORT || 587),
+    secure: String(process.env.EMAIL_SECURE || '').toLowerCase() === 'true',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    to,
+    subject,
+    text: emailBody
+  });
+
+  sendJson(response, 200, { ok: true });
+}
+
 function findLink(html, targetUrl) {
   const normalizedTarget = normalizeUrl(targetUrl);
   const hrefRegex = /<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi;
@@ -114,6 +161,14 @@ function isHttpUrl(value) {
   }
 }
 
+function isEmailConfigured() {
+  return Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS);
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ''));
+}
+
 function readBody(request) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -132,6 +187,31 @@ function readBody(request) {
 function sendJson(response, status, payload) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(payload));
+}
+
+function loadEnvFile() {
+  try {
+    const envText = fsSync.readFileSync(path.join(__dirname, '.env'), 'utf8');
+    envText.split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+
+      const separator = trimmed.indexOf('=');
+      if (separator === -1) return;
+
+      const key = trimmed.slice(0, separator).trim();
+      const rawValue = trimmed.slice(separator + 1).trim();
+      const value = rawValue.replace(/^["']|["']$/g, '');
+
+      if (key && process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    });
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn(`Could not load .env: ${error.message}`);
+    }
+  }
 }
 
 server.listen(PORT, () => {

@@ -5,6 +5,8 @@ Backlink Desk is a local web application for backlink outreach.
 ## Run
 
 ```powershell
+node -e "require('fs').existsSync('node_modules') || console.log('Run npm install first')"
+npm install
 node server.js
 ```
 
@@ -23,6 +25,22 @@ http://localhost:4173
 - Imports and exports CSV files
 - Checks a live backlink URL from the local Node backend
 - Detects `dofollow` and `nofollow`
+- Sends outreach emails automatically when SMTP is configured
+
+## Automatic Email Setup
+
+Create a `.env` file or set these environment variables in your hosting dashboard:
+
+```text
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
+EMAIL_FROM="DC / dr. croley <your-email@gmail.com>"
+```
+
+For Gmail, use an app password, not your normal Gmail password.
 
 ## CSV Columns
 
